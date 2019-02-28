@@ -1,0 +1,4 @@
+stravalib
+requests
+bottle
+pygments
