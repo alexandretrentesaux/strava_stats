@@ -4,7 +4,6 @@
 import logging.config
 from bottle import Bottle, run, route, response, template, request, redirect
 from pygments import highlight, lexers, formatters
-from stravalib import Client
 from requests import post, get
 from json import dumps
 from os.path import exists, expanduser, abspath, join
@@ -93,12 +92,11 @@ def index():
 
 @api.route('{}'.format(HTTP_AUTH), method=['GET'])
 def authorize():
-    client = Client()
-    url = client.authorization_url(client_id=strava_clt_id,
-                                   redirect_uri='http://{}:{}{}'.format(HTTP_HOST, HTTP_PORT, HTTP_VALIDATE),
-                                   # scope=STRAVA_SCOPE[1],
-                                   scope=[STRAVA_SCOPE[0],STRAVA_SCOPE[2],STRAVA_SCOPE[5]],
-                                   approval_prompt='force')
+    redirect_url = 'http://{}:{}{}'.format(HTTP_HOST, HTTP_PORT, HTTP_VALIDATE)
+    scope = '{},{},{}'.format(STRAVA_SCOPE[0], STRAVA_SCOPE[2], STRAVA_SCOPE[5])  # make it dynamic
+    resp_type = 'code'
+    approval_prompt = 'force'
+    url = 'https://www.strava.com/oauth/mobile/authorize?client_id={}&redirect_uri={}&response_type={}&approval_prompt={}&scope={}'.format(strava_clt_id, redirect_url, resp_type, approval_prompt, scope)
     redirect(url)
 
 
