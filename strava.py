@@ -129,7 +129,7 @@ def validate():
 
     after = datetime(datetime.now().year, 1, 1, 0, 0).timestamp()  # current year
     before = datetime(datetime.now().year, 12, 31, 23, 59).timestamp()
-    per_page = 100
+    per_page = 200
 
     activities = []
     yearly_dist = 0
@@ -138,30 +138,29 @@ def validate():
     with open('/home/alexantr/.config/strava/export.json', 'w+') as fh:
         for activity in get('{}/athlete/activities?after={}&before={}&per_page={}&page=1'.format(STRAVA_API, after, before, per_page),
                             headers=headers).json():
-            data = get('{}/activities/{}?include_all_efforts=True'.format(STRAVA_API, activity['id']),
-                        headers=headers).json()
-            if data["type"] == "Run":
-                dump(data, fh, indent=4)
-                yearly_dist += round(data["distance"] / 1000, 2)
-                yearly_duration += data["moving_time"]
-                avg_kmh = ms_to_kmh(data["average_speed"])
+
+            if activity["type"] == "Run":
+                dump(activity, fh, indent=4)
+                yearly_dist += round(activity["distance"] / 1000, 2)
+                yearly_duration += activity["moving_time"]
+                avg_kmh = ms_to_kmh(activity["average_speed"])
                 pace_min, pace_sec = ms_to_minkm(avg_kmh)
-                activities.append({"id": data["id"],
-                                   "date": data["start_date_local"].split('T')[0],
-                                   "distance": round(data["distance"] / 1000, 2),
-                                   "time": str(timedelta(seconds=data["moving_time"])),
-                                   "d+": int(round(data["total_elevation_gain"], 0)),
+                activities.append({"id": activity["id"],
+                                   "date": activity["start_date_local"].split('T')[0],
+                                   "distance": round(activity["distance"] / 1000, 2),
+                                   "time": str(timedelta(seconds=activity["moving_time"])),
+                                   "d+": int(round(activity["total_elevation_gain"], 0)),
                                    "pace": time(minute=pace_min, second=int(pace_sec)).strftime('%M:%S'),
                                    "speed": round(avg_kmh, 2)
                                    })
 
                 compute_yearly_dist(yearly_dist,
-                                    data["start_date_local"].split('T')[0],
-                                    data["total_elevation_gain"])
+                                    activity["start_date_local"].split('T')[0],
+                                    activity["total_elevation_gain"])
 
-                compute_monthly_dist(round(data["distance"] / 1000, 2),
-                                     data["start_date_local"].split('T')[0],
-                                     data["total_elevation_gain"])
+                compute_monthly_dist(round(activity["distance"] / 1000, 2),
+                                     activity["start_date_local"].split('T')[0],
+                                     activity["total_elevation_gain"])
 
     glob_stats.update({"activities": activities,
                     "total km": yearly_dist,
