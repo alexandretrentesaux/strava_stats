@@ -5,7 +5,7 @@ import logging.config
 from bottle import Bottle, run, route, response, template, request, redirect
 from pygments import highlight, lexers, formatters
 from requests import post, get
-from json import dumps
+from json import dumps, dump
 from os.path import exists, expanduser, abspath, join
 from datetime import datetime, timedelta, time
 from math import floor
@@ -71,11 +71,14 @@ MONTHLY = {
 
 YEARLY = {
     "yearly distance": [
-        {"id": 1, "target": 400, "remaining": 400, "state": "", "date": "", "elevation": 0},
-        {"id": 2, "target": 600, "remaining": 600, "state": "", "date": "", "elevation": 0},
-        {"id": 3, "target": 800, "remaining": 800, "state": "", "date": "", "elevation": 0},
-        {"id": 4, "target": 1000, "remaining": 1000, "state": "", "date": "", "elevation": 0},
-        {"id": 5, "target": 1200, "remaining": 1200, "state": "", "date": "", "elevation": 0},
+        {"id": 1, "target": 400, "remaining": 400, "total": "", "state": "", "date": "", "elevation": 0},
+        {"id": 2, "target": 600, "remaining": 600, "total": "", "state": "", "date": "", "elevation": 0},
+        {"id": 3, "target": 800, "remaining": 800, "total": "", "state": "", "date": "", "elevation": 0},
+        {"id": 4, "target": 1000, "remaining": 1000, "total": "", "state": "", "date": "", "elevation": 0},
+        {"id": 5, "target": 1200, "remaining": 1200, "total": "", "state": "", "date": "", "elevation": 0},
+        {"id": 6, "target": 1400, "remaining": 1200, "total": "", "state": "", "date": "", "elevation": 0},
+        {"id": 7, "target": 1600, "remaining": 1200, "total": "", "state": "", "date": "", "elevation": 0},
+        {"id": 8, "target": 1800, "remaining": 1200, "total": "", "state": "", "date": "", "elevation": 0},
     ]
 }
 
@@ -93,7 +96,7 @@ def index():
 @api.route('{}'.format(HTTP_AUTH), method=['GET'])
 def authorize():
     redirect_url = 'http://{}:{}{}'.format(HTTP_HOST, HTTP_PORT, HTTP_VALIDATE)
-    scope = '{},{},{}'.format(STRAVA_SCOPE[0], STRAVA_SCOPE[2], STRAVA_SCOPE[5])  # make it dynamic
+    scope = '{},{},{}'.format(STRAVA_SCOPE[1], STRAVA_SCOPE[2], STRAVA_SCOPE[5])  # make it dynamic
     resp_type = 'code'
     approval_prompt = 'force'
     url = 'https://www.strava.com/oauth/mobile/authorize?client_id={}&redirect_uri={}&response_type={}&approval_prompt={}&scope={}'.format(strava_clt_id, redirect_url, resp_type, approval_prompt, scope)
@@ -125,37 +128,40 @@ def validate():
     }
 
     after = datetime(datetime.now().year, 1, 1, 0, 0).timestamp()  # current year
+    before = datetime(datetime.now().year, 12, 31, 23, 59).timestamp()
     per_page = 100
 
     activities = []
     yearly_dist = 0
     yearly_duration = 0
 
-    for activity in get('{}/athlete/activities?after={}&per_page={}&page=1'.format(STRAVA_API, after, per_page),
-                        headers=headers).json():
-        data = get('{}/activities/{}?include_all_efforts=True'.format(STRAVA_API, activity['id']),
-                    headers=headers).json()
-        if data["type"] == "Run":
-            yearly_dist += round(data["distance"] / 1000, 2)
-            yearly_duration += data["moving_time"]
-            avg_kmh = ms_to_kmh(data["average_speed"])
-            pace_min, pace_sec = ms_to_minkm(avg_kmh)
-            activities.append({"id": data["id"],
-                               "date": data["start_date_local"].split('T')[0],
-                               "distance": round(data["distance"] / 1000, 2),
-                               "time": str(timedelta(seconds=data["moving_time"])),
-                               "d+": int(round(data["total_elevation_gain"], 0)),
-                               "pace": time(minute=pace_min, second=int(pace_sec)).strftime('%M:%S'),
-                               "speed": round(avg_kmh, 2)
-                               })
+    with open('/home/alexantr/.config/strava/export.json', 'w+') as fh:
+        for activity in get('{}/athlete/activities?after={}&before={}&per_page={}&page=1'.format(STRAVA_API, after, before, per_page),
+                            headers=headers).json():
+            data = get('{}/activities/{}?include_all_efforts=True'.format(STRAVA_API, activity['id']),
+                        headers=headers).json()
+            if data["type"] == "Run":
+                dump(data, fh, indent=4)
+                yearly_dist += round(data["distance"] / 1000, 2)
+                yearly_duration += data["moving_time"]
+                avg_kmh = ms_to_kmh(data["average_speed"])
+                pace_min, pace_sec = ms_to_minkm(avg_kmh)
+                activities.append({"id": data["id"],
+                                   "date": data["start_date_local"].split('T')[0],
+                                   "distance": round(data["distance"] / 1000, 2),
+                                   "time": str(timedelta(seconds=data["moving_time"])),
+                                   "d+": int(round(data["total_elevation_gain"], 0)),
+                                   "pace": time(minute=pace_min, second=int(pace_sec)).strftime('%M:%S'),
+                                   "speed": round(avg_kmh, 2)
+                                   })
 
-            compute_yearly_dist(yearly_dist,
-                                data["start_date_local"].split('T')[0],
-                                data["total_elevation_gain"])
+                compute_yearly_dist(yearly_dist,
+                                    data["start_date_local"].split('T')[0],
+                                    data["total_elevation_gain"])
 
-            compute_monthly_dist(round(data["distance"] / 1000, 2),
-                                 data["start_date_local"].split('T')[0],
-                                 data["total_elevation_gain"])
+                compute_monthly_dist(round(data["distance"] / 1000, 2),
+                                     data["start_date_local"].split('T')[0],
+                                     data["total_elevation_gain"])
 
     glob_stats.update({"activities": activities,
                     "total km": yearly_dist,
@@ -197,6 +203,7 @@ def compute_yearly_dist(dist, run_date, elevation):
                 data["remaining"] = res
                 data["state"] = "ongoing"
                 data["elevation"] = round(data["elevation"] + elevation, 2)
+            data["total"] = dist
 
 
 def ms_to_kmh(speed):
